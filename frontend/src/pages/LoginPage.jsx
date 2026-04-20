@@ -5,16 +5,9 @@ import { useAuth } from "../context/AuthContext.jsx";
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "Priya Mehta", password: "password123" });
+  const [form, setForm] = useState({ name: "", password: "" });
   const [error, setError] = useState("");
   const [validationErrors, setValidationErrors] = useState({});
-  const demoUsers = [
-    "Priya Mehta",
-    "Rohan Yadav",
-    "Ananya Verma",
-    "Neha Singh",
-    "Vikram Iyer"
-  ];
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -120,23 +113,6 @@ export default function LoginPage() {
                 </span>
               </Link>
             </div>
-
-            <div className="login-demo-strip">
-              {demoUsers.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  className="ghost-button login-chip"
-                  onClick={() => setForm((current) => ({ ...current, name, password: "password123" }))}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-
-            <p className="login-footnote">
-              Password for all demo accounts: <strong>password123</strong>
-            </p>
           </form>
         </div>
       </div>
