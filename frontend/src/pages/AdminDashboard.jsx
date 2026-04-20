@@ -529,24 +529,6 @@ function CustomersSection({
               />
             </label>
             <label>
-              Delivery latitude
-              <input
-                value={orderForm.latitude}
-                onChange={(event) =>
-                  setOrderForm((current) => ({ ...current, latitude: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              Delivery longitude
-              <input
-                value={orderForm.longitude}
-                onChange={(event) =>
-                  setOrderForm((current) => ({ ...current, longitude: event.target.value }))
-                }
-              />
-            </label>
-            <label>
               Promised by
               <input
                 type="datetime-local"
