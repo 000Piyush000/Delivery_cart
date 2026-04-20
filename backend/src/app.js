@@ -16,9 +16,10 @@ import { errorHandler } from "./middlewares/errorMiddleware.js";
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const allowedOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
 
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin: allowedOrigin,
   credentials: true
 }));
 app.use(express.json());
