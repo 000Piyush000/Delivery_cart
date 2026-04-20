@@ -26,6 +26,13 @@ export const ensureBackwardCompatibleSchema = async () => {
   }
 
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT`);
+  await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_address TEXT`);
+  await pool.query(`
+    UPDATE orders
+    SET pickup_address = COALESCE(pickup_address, delivery_address, 'Unknown pickup address')
+    WHERE pickup_address IS NULL
+  `);
+  await pool.query(`ALTER TABLE orders ALTER COLUMN pickup_address SET NOT NULL`);
   await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_feedback_rating INT`);
   await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_feedback_comment TEXT`);
   await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_feedback_created_at TIMESTAMP`);
