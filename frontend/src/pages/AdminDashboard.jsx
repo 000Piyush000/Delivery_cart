@@ -706,24 +706,6 @@ function DeliveryAgentsSection({
               />
             </label>
             <label>
-              Latitude
-              <input
-                value={riderForm.latitude}
-                onChange={(event) =>
-                  setRiderForm((current) => ({ ...current, latitude: event.target.value }))
-                }
-              />
-            </label>
-            <label>
-              Longitude
-              <input
-                value={riderForm.longitude}
-                onChange={(event) =>
-                  setRiderForm((current) => ({ ...current, longitude: event.target.value }))
-                }
-              />
-            </label>
-            <label>
               Manual availability
               <select
                 value={riderForm.availability ? "available" : "busy"}
