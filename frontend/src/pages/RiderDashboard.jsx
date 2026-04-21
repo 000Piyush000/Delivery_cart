@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { apiRequest, apiRequestOrFallback } from "../api/client.js";
 import StatusBadge from "../components/StatusBadge.jsx";
 import PodViewer from "../components/PodViewer.jsx";
+import PodVerificationBadge from "../components/PodVerificationBadge.jsx";
 import DateFilterSummary from "../components/DateFilterSummary.jsx";
 import DashboardDateControl from "../components/DashboardDateControl.jsx";
 import { matchesSelectedDate } from "../utils/dateFilters.js";
@@ -206,6 +207,7 @@ export default function RiderDashboard({ searchQuery = "", selectedDate = "", on
                     <div className="route-stop-topline">
                       <strong>Order #{task.order_id}</strong>
                       <StatusBadge status={task.order_status} />
+                      {task.order_status === "delivered" ? <PodVerificationBadge status={task.pod_verification_status} /> : null}
                     </div>
                     <p>{task.delivery_address}</p>
                     <div className="route-meta">
@@ -261,6 +263,7 @@ export default function RiderDashboard({ searchQuery = "", selectedDate = "", on
                   <h3>Order #{task.order_id}</h3>
                 </div>
                 <StatusBadge status={task.order_status} />
+                {task.order_status === "delivered" ? <PodVerificationBadge status={task.pod_verification_status} /> : null}
               </div>
               <p>{task.delivery_address}</p>
               <div className="route-meta">

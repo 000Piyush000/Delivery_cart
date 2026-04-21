@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { apiRequestOrFallback } from "../api/client.js";
+import { apiRequest, apiRequestOrFallback } from "../api/client.js";
 import StatCard from "../components/StatCard.jsx";
 import DateFilterSummary from "../components/DateFilterSummary.jsx";
 import DashboardDateControl from "../components/DashboardDateControl.jsx";
+import PodViewer from "../components/PodViewer.jsx";
+import PodVerificationBadge from "../components/PodVerificationBadge.jsx";
 import { matchesSelectedDate } from "../utils/dateFilters.js";
 
 const INITIAL_AUDIT_LOG_COUNT = 4;
@@ -16,20 +18,25 @@ export default function AnalyticsDashboard({ searchQuery = "", selectedDate = ""
   const [analytics, setAnalytics] = useState(EMPTY_ANALYTICS);
   const [orders, setOrders] = useState([]);
   const [disputes, setDisputes] = useState([]);
+  const [pods, setPods] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllAuditLogs, setShowAllAuditLogs] = useState(false);
+  const [auditMessage, setAuditMessage] = useState("");
+  const [activeReviewOrderId, setActiveReviewOrderId] = useState(null);
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
   useEffect(() => {
     const loadAnalytics = async () => {
-      const [analyticsData, ordersData, disputesData] = await Promise.all([
+      const [analyticsData, ordersData, disputesData, podsData] = await Promise.all([
         apiRequestOrFallback("/analytics", EMPTY_ANALYTICS),
         apiRequestOrFallback("/orders", []),
-        apiRequestOrFallback("/disputes", [])
+        apiRequestOrFallback("/disputes", []),
+        apiRequestOrFallback("/pod", [])
       ]);
       setAnalytics(analyticsData);
       setOrders(ordersData);
       setDisputes(disputesData);
+      setPods(podsData);
       setLoading(false);
     };
 
@@ -39,12 +46,14 @@ export default function AnalyticsDashboard({ searchQuery = "", selectedDate = ""
       Promise.all([
         apiRequestOrFallback("/analytics", EMPTY_ANALYTICS),
         apiRequestOrFallback("/orders", []),
-        apiRequestOrFallback("/disputes", [])
+        apiRequestOrFallback("/disputes", []),
+        apiRequestOrFallback("/pod", [])
       ])
-        .then(([analyticsData, ordersData, disputesData]) => {
+        .then(([analyticsData, ordersData, disputesData, podsData]) => {
           setAnalytics(analyticsData);
           setOrders(ordersData);
           setDisputes(disputesData);
+          setPods(podsData);
         })
         .catch(() => null);
     }, 5000);
@@ -55,6 +64,38 @@ export default function AnalyticsDashboard({ searchQuery = "", selectedDate = ""
   useEffect(() => {
     setShowAllAuditLogs(false);
   }, [normalizedSearch, selectedDate]);
+
+  const reviewPod = async (orderId, verified) => {
+    setActiveReviewOrderId(orderId);
+
+    try {
+      await apiRequest(`/pod/${orderId}/verification`, {
+        method: "PATCH",
+        body: JSON.stringify({ verified })
+      });
+
+      const [ordersData, disputesData, podsData, analyticsData] = await Promise.all([
+        apiRequestOrFallback("/orders", []),
+        apiRequestOrFallback("/disputes", []),
+        apiRequestOrFallback("/pod", []),
+        apiRequestOrFallback("/analytics", EMPTY_ANALYTICS)
+      ]);
+
+      setOrders(ordersData);
+      setDisputes(disputesData);
+      setPods(podsData);
+      setAnalytics(analyticsData);
+      setAuditMessage(
+        verified
+          ? `Order #${orderId} marked as POD verified.`
+          : `Order #${orderId} moved to investigation.`
+      );
+    } catch (error) {
+      setAuditMessage(error.message || "Unable to review the POD right now.");
+    } finally {
+      setActiveReviewOrderId(null);
+    }
+  };
 
   if (loading) {
     return <p className="muted">Loading analytics...</p>;
@@ -195,6 +236,27 @@ export default function AnalyticsDashboard({ searchQuery = "", selectedDate = ""
     ? filteredAuditLogs
     : filteredAuditLogs.slice(0, INITIAL_AUDIT_LOG_COUNT);
   const canToggleAuditLogs = filteredAuditLogs.length > INITIAL_AUDIT_LOG_COUNT;
+  const auditPodQueue = pods.filter((pod) => {
+    if (pod.order_status !== "delivered") {
+      return false;
+    }
+
+    if (!matchesSelectedDate(pod.uploaded_at || pod.delivered_at, selectedDate)) {
+      return false;
+    }
+
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    return [
+      pod.order_id,
+      pod.customer_name,
+      pod.rider_name,
+      pod.delivery_address,
+      pod.verification_status
+    ].some((value) => String(value ?? "").toLowerCase().includes(normalizedSearch));
+  });
 
   return (
     <section>
@@ -219,6 +281,8 @@ export default function AnalyticsDashboard({ searchQuery = "", selectedDate = ""
         ))}
       </div>
 
+      {auditMessage ? <p className="banner">{auditMessage}</p> : null}
+
       <DateFilterSummary
         title="Orders by month"
         subtitle="Analytics cards and logs respond to the same date chosen on this page."
@@ -229,6 +293,50 @@ export default function AnalyticsDashboard({ searchQuery = "", selectedDate = ""
       />
 
       <div className="two-column">
+        <div className="card">
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">POD audit</p>
+              <h3>Verify uploaded POD files</h3>
+            </div>
+            <span className="muted">{auditPodQueue.length} uploaded PODs</span>
+          </div>
+          <div className="list-grid">
+            {auditPodQueue.map((pod) => (
+              <div className="card" key={pod.order_id}>
+                <div className="section-heading">
+                  <div>
+                    <p className="section-kicker">Order #{pod.order_id}</p>
+                    <h3>{pod.customer_name || "Customer"}</h3>
+                  </div>
+                  <PodVerificationBadge status={pod.verification_status} />
+                </div>
+                <p className="muted">Rider: {pod.rider_name || "Unassigned"}</p>
+                <p className="muted">Hash check: {pod.verified ? "true" : "false"}</p>
+                <PodViewer pod={pod} />
+                <div className="button-row">
+                  <button
+                    type="button"
+                    disabled={activeReviewOrderId === pod.order_id || !pod.verified}
+                    onClick={() => reviewPod(pod.order_id, true)}
+                  >
+                    {activeReviewOrderId === pod.order_id ? "Saving..." : "True"}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={activeReviewOrderId === pod.order_id}
+                    onClick={() => reviewPod(pod.order_id, false)}
+                  >
+                    False
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {!auditPodQueue.length ? <p className="muted empty-state-text">No delivered orders with uploaded POD files match the current filters.</p> : null}
+        </div>
+
         <div className="card graph-card">
           <div className="section-heading">
             <div>
