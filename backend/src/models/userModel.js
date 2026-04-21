@@ -14,6 +14,9 @@ export const createUser = async ({ name, role, passwordHash, address = null }, c
 export const createCustomer = async ({ name, passwordHash, address }) =>
   createUser({ name, role: "customer", passwordHash, address });
 
+export const createAdmin = async ({ name, passwordHash, address = null }) =>
+  createUser({ name, role: "admin", passwordHash, address });
+
 export const findUserById = async (id) =>
   pool.query(`SELECT id, name, role, address FROM users WHERE id = $1`, [id]);
 

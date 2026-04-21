@@ -1,6 +1,6 @@
 const statusLabelMap = {
   picked: "Picked",
-  out_for_delivery: "In Transit",
+  out_for_delivery: "Out for delivery",
   delivered: "Delivered",
   open: "Open",
   investigate: "Investigating",
@@ -9,7 +9,9 @@ const statusLabelMap = {
   assigned: "Assigned",
   unassigned: "Unassigned",
   available: "Available",
-  busy: "Busy"
+  busy: "Busy",
+  pod_verified: "POD Verified",
+  pod_investigate: "POD Investigate"
 };
 
 export default function StatusBadge({ status }) {

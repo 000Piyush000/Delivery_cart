@@ -20,8 +20,12 @@ export const createOrder = async ({
 
 export const getOrders = async () =>
   pool.query(
-    `SELECT orders.*, users.name AS customer_name, hubs.name AS hub_name,
+    `SELECT orders.*,
+            COALESCE(latest_delivery_status.status, orders.status) AS status,
+            users.name AS customer_name, hubs.name AS hub_name,
             assignments.rider_id, riders.name AS rider_name, assignments.eta,
+            pod.verification_status AS pod_verification_status,
+            pod.verification_checked_at AS pod_verification_checked_at,
             rider_feedback.average_feedback_rating,
             rider_feedback.feedback_count
      FROM orders
@@ -29,6 +33,14 @@ export const getOrders = async () =>
      LEFT JOIN hubs ON hubs.id = orders.hub_id
      LEFT JOIN assignments ON assignments.order_id = orders.id
      LEFT JOIN riders ON riders.id = assignments.rider_id
+     LEFT JOIN pod ON pod.order_id = orders.id
+     LEFT JOIN LATERAL (
+       SELECT delivery_status.status
+       FROM delivery_status
+       WHERE delivery_status.order_id = orders.id
+       ORDER BY delivery_status.timestamp DESC, delivery_status.id DESC
+       LIMIT 1
+     ) AS latest_delivery_status ON TRUE
      LEFT JOIN (
        SELECT assignments.rider_id,
               ROUND(AVG(orders.customer_feedback_rating)::numeric, 1) AS average_feedback_rating,
@@ -43,10 +55,22 @@ export const getOrders = async () =>
 
 export const getOrderById = async (id) =>
   pool.query(
-    `SELECT orders.*, users.name AS customer_name, hubs.name AS hub_name
+    `SELECT orders.*,
+            COALESCE(latest_delivery_status.status, orders.status) AS status,
+            users.name AS customer_name, hubs.name AS hub_name,
+            pod.verification_status AS pod_verification_status,
+            pod.verification_checked_at AS pod_verification_checked_at
      FROM orders
      LEFT JOIN users ON users.id = orders.customer_id
      LEFT JOIN hubs ON hubs.id = orders.hub_id
+     LEFT JOIN pod ON pod.order_id = orders.id
+     LEFT JOIN LATERAL (
+       SELECT delivery_status.status
+       FROM delivery_status
+       WHERE delivery_status.order_id = orders.id
+       ORDER BY delivery_status.timestamp DESC, delivery_status.id DESC
+       LIMIT 1
+     ) AS latest_delivery_status ON TRUE
      WHERE orders.id = $1`,
     [id]
   );
@@ -77,12 +101,24 @@ export const saveOrderFeedback = async ({ orderId, customerId, rating, comment }
 
 export const getOrdersForCustomer = async (customerId) =>
   pool.query(
-    `SELECT orders.*, assignments.rider_id, riders.name AS rider_name, assignments.eta,
+    `SELECT orders.*,
+            COALESCE(latest_delivery_status.status, orders.status) AS status,
+            assignments.rider_id, riders.name AS rider_name, assignments.eta,
+            pod.verification_status AS pod_verification_status,
+            pod.verification_checked_at AS pod_verification_checked_at,
             rider_feedback.average_feedback_rating,
             rider_feedback.feedback_count
      FROM orders
      LEFT JOIN assignments ON assignments.order_id = orders.id
      LEFT JOIN riders ON riders.id = assignments.rider_id
+     LEFT JOIN pod ON pod.order_id = orders.id
+     LEFT JOIN LATERAL (
+       SELECT delivery_status.status
+       FROM delivery_status
+       WHERE delivery_status.order_id = orders.id
+       ORDER BY delivery_status.timestamp DESC, delivery_status.id DESC
+       LIMIT 1
+     ) AS latest_delivery_status ON TRUE
      LEFT JOIN (
        SELECT assignments.rider_id,
               ROUND(AVG(orders.customer_feedback_rating)::numeric, 1) AS average_feedback_rating,

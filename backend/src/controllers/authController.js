@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import { createCustomer, findUserByName } from "../models/userModel.js";
+import { createAdmin, createCustomer, findUserByName } from "../models/userModel.js";
+import { createAuditLog } from "../models/auditModel.js";
 
 dotenv.config();
 
@@ -65,4 +66,35 @@ export const registerCustomer = async (req, res) => {
   });
 
   return res.status(201).json(buildAuthResponse(createdUser.rows[0]));
+};
+
+export const registerAdmin = async (req, res) => {
+  const { name, password, address } = req.body;
+  const normalizedName = name?.trim();
+  const normalizedAddress = address?.trim();
+
+  if (!normalizedName || !password?.trim()) {
+    return res.status(400).json({ message: "Admin name and password are required" });
+  }
+
+  const existingUser = await findUserByName(normalizedName);
+
+  if (existingUser.rows.length) {
+    return res.status(409).json({ message: "A user with this name already exists" });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const createdUser = await createAdmin({
+    name: normalizedName,
+    passwordHash,
+    address: normalizedAddress || null
+  });
+
+  await createAuditLog({
+    userId: req.user.id,
+    action: "ADMIN_CREATED",
+    metadata: { adminId: createdUser.rows[0].id, adminName: normalizedName }
+  });
+
+  return res.status(201).json(createdUser.rows[0]);
 };

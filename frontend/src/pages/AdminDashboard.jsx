@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { apiRequest, apiRequestOrFallback } from "../api/client.js";
 import StatCard from "../components/StatCard.jsx";
 import StatusBadge from "../components/StatusBadge.jsx";
+import PodVerificationBadge from "../components/PodVerificationBadge.jsx";
 import DateFilterSummary from "../components/DateFilterSummary.jsx";
 import DashboardDateControl from "../components/DashboardDateControl.jsx";
 import { matchesSelectedDate } from "../utils/dateFilters.js";
@@ -28,6 +29,11 @@ const adminViews = {
     title: "Customer overview and order placement",
     description: "See customer information, review order detail, and place a new order without leaving the admin workspace."
   },
+  "/admin/admins": {
+    eyebrow: "Admins",
+    title: "Admin access management",
+    description: "Add new admin users with their details and keep existing operational records untouched."
+  },
   "/admin/delivery-agents": {
     eyebrow: "Delivery agents",
     title: "Rider workload and roster management",
@@ -48,6 +54,7 @@ const adminViews = {
 const adminShortcuts = [
   { to: "/admin/orders", title: "Orders", detail: "Assigned and unassigned queue with date filtering." },
   { to: "/admin/customers", title: "Customers", detail: "Customer info, order detail, and place-order flow." },
+  { to: "/admin/admins", title: "Admins", detail: "Add more admins and review current admin access." },
   { to: "/admin/delivery-agents", title: "Delivery agents", detail: "Add riders, remove riders, and unassign work." },
   { to: "/admin/hubs", title: "Hub details", detail: "Hub registry and creation tools." },
   { to: "/admin/audit-logs", title: "Audit log", detail: "Recent admin and ops activity." }
@@ -78,6 +85,12 @@ const createInitialRiderForm = () => ({
   availability: true
 });
 
+const createInitialAdminForm = () => ({
+  name: "Aarav Sharma",
+  password: "password123",
+  address: "Admin desk, Delhi HQ"
+});
+
 const matchesSearch = (values, normalizedSearch) => {
   if (!normalizedSearch) {
     return true;
@@ -98,6 +111,12 @@ const formatDateTime = (value) => {
 };
 
 const formatCoordinates = (latitude, longitude) => `${latitude}, ${longitude}`;
+const formatStatusLabel = (status) =>
+  String(status ?? "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 
 const getAssignmentState = (order) => (order.rider_id ? "assigned" : "unassigned");
 
@@ -325,7 +344,12 @@ function OrdersSection({
                   <td>{formatDateTime(order.created_at)}</td>
                   <td>{order.customer_name}</td>
                   <td><StatusBadge status={getAssignmentState(order)} /></td>
-                  <td><StatusBadge status={order.status} /></td>
+                  <td>
+                    <div className="status-stack">
+                      <StatusBadge status={order.status} />
+                      {order.status === "delivered" ? <PodVerificationBadge status={order.pod_verification_status} /> : null}
+                    </div>
+                  </td>
                   <td>{order.hub_name}</td>
                   <td>{order.rider_name || "Unassigned"}</td>
                   <td>{formatDateTime(order.promised_at)}</td>
@@ -573,7 +597,12 @@ function CustomersSection({
                         <div className="metric-stack">
                           <strong>#{customer.latestOrder.id}</strong>
                           <span className="muted">{customer.latestOrder.delivery_address}</span>
-                          <StatusBadge status={customer.latestOrder.status} />
+                          <div className="status-stack">
+                            <StatusBadge status={customer.latestOrder.status} />
+                            {customer.latestOrder.status === "delivered" ? (
+                              <PodVerificationBadge status={customer.latestOrder.pod_verification_status} />
+                            ) : null}
+                          </div>
                         </div>
                       ) : (
                         <span className="muted">No orders yet</span>
@@ -614,7 +643,12 @@ function CustomersSection({
                 <tr key={order.id}>
                   <td>#{order.id}</td>
                   <td>{order.customer_name}</td>
-                  <td><StatusBadge status={order.status} /></td>
+                  <td>
+                    <div className="status-stack">
+                      <StatusBadge status={order.status} />
+                      {order.status === "delivered" ? <PodVerificationBadge status={order.pod_verification_status} /> : null}
+                    </div>
+                  </td>
                   <td>{order.rider_name || "Pending assignment"}</td>
                   <td>{order.hub_name}</td>
                   <td>{order.delivery_address}</td>
@@ -625,6 +659,135 @@ function CustomersSection({
           </table>
         </div>
         {!filteredOrders.length ? <p className="muted empty-state-text">No customer orders match the selected date and search.</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function AdminsSection({
+  selectedDate,
+  onSelectedDateChange,
+  message,
+  admins,
+  adminForm,
+  setAdminForm,
+  createAdmin
+}) {
+  return (
+    <section>
+      <AdminHero
+        eyebrow={adminViews["/admin/admins"].eyebrow}
+        title={adminViews["/admin/admins"].title}
+        description={adminViews["/admin/admins"].description}
+        selectedDate={selectedDate}
+        onSelectedDateChange={onSelectedDateChange}
+      />
+
+      <div className="stats-grid">
+        <StatCard label="Admins" value={admins.length} helper="Current admin accounts" icon="AD" />
+        <StatCard label="Named accounts" value={admins.filter((admin) => admin.name).length} helper="Admins with login-ready profiles" icon="AC" />
+        <StatCard label="Details saved" value={admins.filter((admin) => admin.address).length} helper="Admin records with detail or address" icon="DT" />
+        <StatCard label="Latest account" value={admins[0] ? formatDateTime(admins[0].created_at) : "--"} helper="Most recently created admin" icon="NW" />
+      </div>
+
+      {message ? <p className="banner">{message}</p> : null}
+
+      <div className="two-column">
+        <div className="card">
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">Admin creation</p>
+              <h3>Add new admin</h3>
+            </div>
+          </div>
+          <form className="form-grid" onSubmit={createAdmin}>
+            <label>
+              Admin name
+              <input
+                value={adminForm.name}
+                onChange={(event) =>
+                  setAdminForm((current) => ({ ...current, name: event.target.value }))
+                }
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={adminForm.password}
+                onChange={(event) =>
+                  setAdminForm((current) => ({ ...current, password: event.target.value }))
+                }
+              />
+            </label>
+            <label>
+              Detail / address
+              <input
+                value={adminForm.address}
+                onChange={(event) =>
+                  setAdminForm((current) => ({ ...current, address: event.target.value }))
+                }
+              />
+            </label>
+            <button type="submit">Add admin</button>
+          </form>
+        </div>
+
+        <div className="card">
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">Access rules</p>
+              <h3>What the new admin gets</h3>
+            </div>
+          </div>
+          <div className="summary-list">
+            <div className="summary-list-item">
+              <strong>Full admin login</strong>
+              <span className="muted">The new account uses the same admin role checks as existing admins.</span>
+            </div>
+            <div className="summary-list-item">
+              <strong>Separate account record</strong>
+              <span className="muted">Creating an admin inserts a new user only and does not edit customers, riders, hubs, or orders.</span>
+            </div>
+            <div className="summary-list-item">
+              <strong>Audit visibility</strong>
+              <span className="muted">Each admin creation is logged in the audit stream.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="section-heading">
+          <div>
+            <p className="section-kicker">Admin registry</p>
+            <h3>Current admins</h3>
+          </div>
+          <span className="muted">{admins.length} rows</span>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Detail</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {admins.map((admin) => (
+                <tr key={admin.id}>
+                  <td>{admin.name}</td>
+                  <td>{formatStatusLabel(admin.role)}</td>
+                  <td>{admin.address || "--"}</td>
+                  <td>{formatDateTime(admin.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!admins.length ? <p className="muted empty-state-text">No admins found.</p> : null}
       </div>
     </section>
   );
@@ -829,7 +992,12 @@ function DeliveryAgentsSection({
                   <td>#{order.id}</td>
                   <td>{order.customer_name}</td>
                   <td>{order.rider_name}</td>
-                  <td><StatusBadge status={order.status} /></td>
+                  <td>
+                    <div className="status-stack">
+                      <StatusBadge status={order.status} />
+                      {order.status === "delivered" ? <PodVerificationBadge status={order.pod_verification_status} /> : null}
+                    </div>
+                  </td>
                   <td>{formatDateTime(order.promised_at)}</td>
                   <td className="table-action-cell">
                     <div className="action-stack action-stack-compact">
@@ -1081,12 +1249,14 @@ export default function AdminDashboard({
   const [riders, setRiders] = useState([]);
   const [hubs, setHubs] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [admins, setAdmins] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [message, setMessage] = useState("");
   const [manualSelection, setManualSelection] = useState({});
   const [orderForm, setOrderForm] = useState(createInitialOrderForm());
   const [hubForm, setHubForm] = useState(createInitialHubForm());
   const [riderForm, setRiderForm] = useState(createInitialRiderForm());
+  const [adminForm, setAdminForm] = useState(createInitialAdminForm());
 
   const loadData = async (showSpinner = false) => {
     if (showSpinner) {
@@ -1098,12 +1268,14 @@ export default function AdminDashboard({
       ridersData,
       hubsData,
       customersData,
+      adminsData,
       auditLogData
     ] = await Promise.all([
       apiRequestOrFallback("/orders", []),
       apiRequestOrFallback("/riders", []),
       apiRequestOrFallback("/hubs", []),
       apiRequestOrFallback("/users/role/customer", []),
+      apiRequestOrFallback("/users/role/admin", []),
       apiRequestOrFallback("/analytics/audit", [])
     ]);
 
@@ -1111,6 +1283,7 @@ export default function AdminDashboard({
     setRiders(ridersData);
     setHubs(hubsData);
     setCustomers(customersData);
+    setAdmins(adminsData);
     setAuditLogs(auditLogData);
 
     setLoading(false);
@@ -1156,7 +1329,7 @@ export default function AdminDashboard({
       setMessage(successMessage);
       await loadData();
     } catch (error) {
-      setMessage("Unable to complete that action right now.");
+      setMessage(error.message || "Unable to complete that action right now.");
     }
   };
 
@@ -1264,6 +1437,29 @@ export default function AdminDashboard({
     );
   };
 
+  const createAdmin = async (event) => {
+    event.preventDefault();
+
+    if (!adminForm.name.trim() || !adminForm.password.trim()) {
+      setMessage("Admin name and password are required before submitting.");
+      return;
+    }
+
+    await runAdminAction(
+      () =>
+        apiRequest("/auth/register-admin", {
+          method: "POST",
+          body: JSON.stringify({
+            name: adminForm.name,
+            password: adminForm.password,
+            address: adminForm.address
+          })
+        }),
+      `Added admin ${adminForm.name}. They can now log in with full admin access.`,
+      () => setAdminForm(createInitialAdminForm())
+    );
+  };
+
   const toggleRiderAvailability = async (rider) => {
     await runAdminAction(
       () =>
@@ -1292,6 +1488,7 @@ export default function AdminDashboard({
         order.id,
         order.customer_name,
         order.status,
+        formatStatusLabel(order.status),
         order.hub_name,
         order.rider_name,
         order.delivery_address,
@@ -1384,6 +1581,25 @@ export default function AdminDashboard({
         orderForm={orderForm}
         setOrderForm={setOrderForm}
         createOrder={createOrder}
+      />
+    );
+  }
+
+  if (location.pathname === "/admin/admins") {
+    return (
+      <AdminsSection
+        selectedDate={selectedDate}
+        onSelectedDateChange={onSelectedDateChange}
+        message={message}
+        admins={admins.filter((admin) =>
+          matchesSearch(
+            [admin.name, admin.role, formatStatusLabel(admin.role), admin.address, formatDateTime(admin.created_at)],
+            normalizedSearch
+          )
+        )}
+        adminForm={adminForm}
+        setAdminForm={setAdminForm}
+        createAdmin={createAdmin}
       />
     );
   }

@@ -7,13 +7,13 @@ const riderSummarySelect = `
     users.role,
     users.created_at,
     COUNT(assignments.order_id) FILTER (
-      WHERE orders.status IS DISTINCT FROM 'delivered'
+      WHERE COALESCE(latest_delivery_status.status, orders.status) IS DISTINCT FROM 'delivered'
     )::INT AS active_assignments,
     COUNT(assignments.order_id)::INT AS total_assignments,
     CASE
       WHEN riders.availability = FALSE
         OR COUNT(assignments.order_id) FILTER (
-          WHERE orders.status IS DISTINCT FROM 'delivered'
+          WHERE COALESCE(latest_delivery_status.status, orders.status) IS DISTINCT FROM 'delivered'
         ) >= 3
       THEN 'busy'
       ELSE 'available'
@@ -21,7 +21,7 @@ const riderSummarySelect = `
     (
       riders.availability = TRUE
       AND COUNT(assignments.order_id) FILTER (
-        WHERE orders.status IS DISTINCT FROM 'delivered'
+        WHERE COALESCE(latest_delivery_status.status, orders.status) IS DISTINCT FROM 'delivered'
       ) < 3
     ) AS can_take_orders,
     ROUND(AVG(orders.customer_feedback_rating) FILTER (
@@ -32,6 +32,13 @@ const riderSummarySelect = `
   LEFT JOIN users ON users.id = riders.user_id
   LEFT JOIN assignments ON assignments.rider_id = riders.id
   LEFT JOIN orders ON orders.id = assignments.order_id
+  LEFT JOIN LATERAL (
+    SELECT delivery_status.status
+    FROM delivery_status
+    WHERE delivery_status.order_id = orders.id
+    ORDER BY delivery_status.timestamp DESC, delivery_status.id DESC
+    LIMIT 1
+  ) AS latest_delivery_status ON TRUE
 `;
 
 const riderSummaryGroupBy = `
@@ -61,12 +68,24 @@ export const getAvailableRiders = async () =>
 export const getRiderTasks = async (riderId) =>
   pool
     .query(
-      `SELECT assignments.*, orders.status AS order_status, orders.delivery_address,
+      `SELECT assignments.*,
+              COALESCE(latest_delivery_status.status, orders.status) AS order_status,
+              orders.delivery_address,
               orders.latitude, orders.longitude, orders.promised_at,
+              pod.verification_status AS pod_verification_status,
+              pod.verification_checked_at AS pod_verification_checked_at,
               orders.customer_feedback_rating, orders.customer_feedback_comment,
               orders.customer_feedback_created_at
        FROM assignments
        JOIN orders ON orders.id = assignments.order_id
+       LEFT JOIN pod ON pod.order_id = orders.id
+       LEFT JOIN LATERAL (
+         SELECT delivery_status.status
+         FROM delivery_status
+         WHERE delivery_status.order_id = orders.id
+         ORDER BY delivery_status.timestamp DESC, delivery_status.id DESC
+         LIMIT 1
+       ) AS latest_delivery_status ON TRUE
        WHERE assignments.rider_id = $1
        ORDER BY assignments.assigned_at DESC`,
       [riderId]
@@ -77,13 +96,24 @@ export const getRiderTasks = async (riderId) =>
       }
 
       return pool.query(
-        `SELECT assignments.*, orders.status AS order_status, orders.delivery_address,
+        `SELECT assignments.*,
+                COALESCE(latest_delivery_status.status, orders.status) AS order_status,
+                orders.delivery_address,
                 orders.latitude, orders.longitude, orders.promised_at,
+                NULL::VARCHAR AS pod_verification_status,
+                NULL::TIMESTAMP AS pod_verification_checked_at,
                 NULL::INT AS customer_feedback_rating,
                 NULL::TEXT AS customer_feedback_comment,
                 NULL::TIMESTAMP AS customer_feedback_created_at
          FROM assignments
          JOIN orders ON orders.id = assignments.order_id
+         LEFT JOIN LATERAL (
+           SELECT delivery_status.status
+           FROM delivery_status
+           WHERE delivery_status.order_id = orders.id
+           ORDER BY delivery_status.timestamp DESC, delivery_status.id DESC
+           LIMIT 1
+         ) AS latest_delivery_status ON TRUE
          WHERE assignments.rider_id = $1
          ORDER BY assignments.assigned_at DESC`,
         [riderId]

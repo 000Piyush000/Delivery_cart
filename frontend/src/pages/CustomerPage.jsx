@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
 import { apiRequest, apiRequestOrFallback } from "../api/client.js";
 import StatusBadge from "../components/StatusBadge.jsx";
+import PodVerificationBadge from "../components/PodVerificationBadge.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const pickupAddressByCustomer = {
   "Ananya Verma": "12 A , Ramnagar, near Railway Station",
   "Arjun Rao": "Sector 17, Greator Noida"
 };
+
+const formatStatusLabel = (status) =>
+  String(status ?? "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 
 export default function CustomerPage({ searchQuery = "" }) {
   const { user } = useAuth();
@@ -155,6 +163,7 @@ export default function CustomerPage({ searchQuery = "" }) {
     return [
       order.id,
       order.status,
+      formatStatusLabel(order.status),
       order.rider_name,
       order.eta,
       order.delivery_address
@@ -266,6 +275,7 @@ export default function CustomerPage({ searchQuery = "" }) {
           <div className="card" key={order.id}>
             <h3>Order #{order.id}</h3>
             <StatusBadge status={order.status} />
+            {order.status === "delivered" ? <PodVerificationBadge status={order.pod_verification_status} /> : null}
             <div className="metric-stack">
               <p>Rider: {order.rider_name || "Pending assignment"}</p>
               {order.rider_name ? (
@@ -284,7 +294,7 @@ export default function CustomerPage({ searchQuery = "" }) {
               <div className="timeline">
                 {tracking[order.id].map((item) => (
                   <div key={`${order.id}-${item.id}`} className="timeline-item">
-                    <strong>{item.status}</strong>
+                    <strong>{formatStatusLabel(item.status)}</strong>
                     <span>{new Date(item.timestamp).toLocaleString()}</span>
                   </div>
                 ))}

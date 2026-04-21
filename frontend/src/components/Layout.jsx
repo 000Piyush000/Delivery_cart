@@ -8,6 +8,7 @@ const navigationByRole = {
     { to: "/auditor", label: "Analytics", icon: "AN" },
     { to: "/admin/orders", label: "Orders", icon: "OR" },
     { to: "/admin/customers", label: "Customers Overview", icon: "CU" },
+    { to: "/admin/admins", label: "Admins", icon: "AD" },
     { to: "/admin/delivery-agents", label: "Delivery Agents", icon: "DA" },
     { to: "/admin/hubs", label: "Hub Details", icon: "HB" },
     { to: "/admin/audit-logs", label: "Recent Audit Log", icon: "AL" }
@@ -30,6 +31,10 @@ const headerMeta = {
   "/admin/customers": {
     title: "Customer Overview",
     subtitle: "Review customers, inspect order detail, and place new orders."
+  },
+  "/admin/admins": {
+    title: "Admin Access",
+    subtitle: "Create additional admin accounts without affecting existing records."
   },
   "/admin/delivery-agents": {
     title: "Delivery Agents",

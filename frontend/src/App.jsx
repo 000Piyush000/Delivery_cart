@@ -13,6 +13,7 @@ const adminRoutes = [
   "/admin",
   "/admin/orders",
   "/admin/customers",
+  "/admin/admins",
   "/admin/delivery-agents",
   "/admin/hubs",
   "/admin/audit-logs"
